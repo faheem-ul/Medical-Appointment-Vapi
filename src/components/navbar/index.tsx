@@ -17,7 +17,7 @@ const Navbar = () => {
   const navLinks = ["Home", "Features", "About Us", "Feedback", "Contact"];
 
   return (
-    <nav className="w-full py-6 md:pt-[80px] px-4 md:px-8 pb-12 md:pb-16 relative z-0" style={{ background: 'linear-gradient(179.1deg, #CBEDFB 0%, #FFFFFF 60%)' }}>
+    <nav className="w-full py-6 md:pt-[80px] px-4 md:px-8 md:pb-16 relative z-0" style={{ background: 'linear-gradient(179.1deg, #CBEDFB 0%, #FFFFFF 60%)' }}>
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Logo and Brand Name */}
         <div className="flex items-center gap-3">
@@ -26,13 +26,8 @@ const Navbar = () => {
             alt="My Doctor Logo"
             // width={40}
             // height={40}
-            // className="w-10 h-10"
+            className=""
           />
-          <Text
-            className="text-primary text-[28px] leading-[32px] font-normal font-poppins"
-          >
-            My Doctor
-          </Text>
         </div>
 
         {/* Navigation Links - Desktop */}

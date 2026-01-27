@@ -56,13 +56,20 @@ const Dedicated = () => {
           </Text>
 
           {/* Statistics */}
-          <div className="flex flex-col md:flex-row md:gap-12 gap-8 mt-4">
+          <div className="grid grid-cols-2 md:flex md:flex-row gap-x-4 gap-y-8 md:gap-12 mt-4">
             {stats.map((stat, index) => (
-              <div key={index} className="flex flex-col gap-2">
+              <div 
+                key={index} 
+                className={`flex flex-col gap-2 ${
+                  index === 2 
+                    ? "col-span-2 items-center md:col-auto md:items-start" 
+                    : "items-center md:items-start"
+                }`}
+              >
                 <Text as="h1" className="text-secondary text-[32px] md:text-[48px] leading-tight">
                   {stat.number}
                 </Text>
-                <Text className="text-secondary text-[14px] md:text-[20px] md:leading-[24px]">
+                <Text className="text-secondary text-[14px] md:text-[20px] md:leading-[24px] text-center md:text-left">
                   {stat.label}
                 </Text>
               </div>

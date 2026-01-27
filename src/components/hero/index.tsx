@@ -30,7 +30,7 @@ const Hero = () => {
   };
 
   return (
-    <section className="relative w-full min-h-screen py-12 md:pb-20 px-4 md:px-8 overflow-hidden">
+    <section className="relative w-full md:min-h-screen pt-12 pb-24 md:pb-20 px-4 md:px-8 overflow-hidden">
       <div className="relative z-10 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-start">
           {/* Left Section - Text and Form */}
@@ -112,18 +112,6 @@ const Hero = () => {
             //   priority
             />
           </div>
-        </div>
-      </div>
-
-      {/* Mobile - Phone Image */}
-      <div className="md:hidden order-2 mt-8 flex justify-center">
-        <div className="relative w-full max-w-md">
-          <Image
-            src={handandPhoneImage}
-            alt="Hand holding iPhone with My Doctor app"
-            className="w-full h-auto object-contain"
-            priority
-          />
         </div>
       </div>
     </section>

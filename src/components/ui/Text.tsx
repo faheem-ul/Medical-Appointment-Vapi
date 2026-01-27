@@ -17,7 +17,7 @@ const Text: React.FC<TextPropTypes> = (props) => {
       <h1
         id={id}
         className={twMerge(
-          "text-primary text-[24px] leading-[33px] md:text-[48px] md:leading-[52px] font-semibold font-poppins",
+          "text-primary text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] font-semibold font-poppins",
           className
         )}
       >

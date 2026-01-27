@@ -51,7 +51,7 @@ const KeyFeatures = () => {
   ];
 
   return (
-    <section className="w-full bg-white py-12 md:py-20 px-4 md:px-8">
+    <section className="w-full bg-white pb-12 pt-24 md:py-20 px-4 md:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Heading Section */}
         <div className="text-center mb-12 md:mb-16">
@@ -212,7 +212,7 @@ const KeyFeatures = () => {
         </div>
 
         {/* Mobile View - Vertical Stack */}
-        <div className="md:hidden flex flex-col gap-8 mb-12">
+        <div className="md:hidden flex flex-col gap-8 md:mb-12">
           {/* 2 cards above */}
           {features.slice(0, 2).map((feature, index) => (
             <div

@@ -3,6 +3,9 @@ import Navbar from "@/components/navbar"
 import Dedicated from "@/components/dedicated"
 import KeyFeatures from "@/components/keyFeatures"
 import BookAppointment from "@/components/bookAppointment"
+import Slider from "@/components/slider"
+import GetDoctor from "@/components/getdoctor"
+import Footer from "@/components/footer"
 
 const HomePage = () => {
   return (
@@ -12,6 +15,9 @@ const HomePage = () => {
       <Dedicated />
       <KeyFeatures />
       <BookAppointment />
+      <Slider />
+      <GetDoctor />
+      <Footer />
     </div>
   )
 }

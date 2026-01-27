@@ -6,10 +6,10 @@ import appointment from "@/public/book-appointment.png";
 
 const BookAppointment = () => {
   return (
-    <section className="w-full bg-white py-16 md:py-24 px-4 md:px-8">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12 md:gap-20">
+    <section className="w-full bg-white py-12 md:py-24 px-4 md:px-8">
+      <div className="max-w-7xl mx-auto flex flex-col-reverse md:flex-row items-center gap-12 md:gap-20">
         {/* Left Section - Image */}
-        <div className="w-full md:w-1/2 flex justify-center order-1 md:order-1">
+        <div className="w-full md:w-1/2 flex justify- order-1 md:order-1">
           <div className="relative w-full max-w-lg">
             <Image
               src={appointment}

@@ -186,7 +186,7 @@ async function sendToGHL(name: string, email: string, phone: string) {
       lastName,
       email,
       phone: formattedPhone,
-      tags: ["outbound"],
+      tags: ["medical outbound"],
     };
 
     // Try with locationId in URL query parameter

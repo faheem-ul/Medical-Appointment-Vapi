@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
+import Script from "next/script";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -18,12 +20,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_CAPTCHA_SITE_KEY;
+
   return (
     <html lang="en">
       <body
         className={`${poppins.variable} antialiased`}
       >
+        {recaptchaSiteKey && (
+          <Script
+            src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`}
+            strategy="afterInteractive"
+          />
+        )}
         {children}
+        <Toaster position="top-center" />
       </body>
     </html>
   );

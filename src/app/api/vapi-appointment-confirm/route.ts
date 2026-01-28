@@ -13,64 +13,107 @@ const transport = nodemailer.createTransport({
   tls: { rejectUnauthorized: false },
 });
 
-function safeJsonParse(input: string | undefined): Record<string, unknown> | undefined {
-  if (typeof input !== "string") return input;
-  try {
-    return JSON.parse(input);
-  } catch {
-    return undefined;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    
+    // Debug: Log full payload
+    console.log('=== VAPI Appointment Confirm - Full Payload ===');
+    console.log('Full body:', JSON.stringify(body, null, 2));
+    
     const message = body?.message;
+    console.log('Message object:', JSON.stringify(message, null, 2));
 
-    // 1) Find toolCallId + args in the "new" Vapi format
-    const toolCallFromList = message?.toolCallList?.[0];
-    const toolCallIdFromList = toolCallFromList?.id;
-    const argsFromList =
-      toolCallFromList?.arguments ??
-      toolCallFromList?.parameters ??
-      {};
+    // Use the same method as vapi-webhook to get parameters
+    const toolCall = message?.toolCalls?.[0];
+    console.log('Tool call object:', JSON.stringify(toolCall, null, 2));
+    
+    const toolCallId = toolCall?.id;
+    console.log('Tool call ID:', toolCallId);
+    
+    const rawArgs = toolCall?.function?.arguments;
+    console.log('Raw arguments (before parsing):', rawArgs);
+    console.log('Raw arguments type:', typeof rawArgs);
+    
+    // Parse arguments with error handling
+    let args: {
+      callerEmail?: string;
+      callerName?: string;
+      callerNumber?: string;
+      appointmentDate?: string;
+      appointmentTime?: string;
+      [key: string]: unknown;
+    } = {};
+    
+    try {
+      if (typeof rawArgs === 'string') {
+        console.log('Parsing rawArgs as JSON string...');
+        args = JSON.parse(rawArgs);
+      } else if (rawArgs && typeof rawArgs === 'object') {
+        console.log('Using rawArgs as object directly...');
+        args = rawArgs as typeof args;
+      } else {
+        console.log('No rawArgs found, using empty object');
+        args = {};
+      }
+    } catch (parseError) {
+      console.error('Error parsing arguments:', parseError);
+      console.error('Failed to parse rawArgs:', rawArgs);
+      args = {};
+    }
+    
+    console.log('Parsed arguments:', JSON.stringify(args, null, 2));
+    console.log('Arguments keys:', Object.keys(args));
 
-    // 2) Back-compat: older format (your current handler uses this style)
-    const toolCallOld = message?.toolCalls?.[0];
-    const toolCallIdOld = toolCallOld?.id;
-    const rawArgsOld = toolCallOld?.function?.arguments;
-    const argsOld = safeJsonParse(rawArgsOld as string | undefined) ?? rawArgsOld ?? {};
+    // Extract email and other appointment details
+    const callerEmail = args.callerEmail || "";
+    const callerName = args.callerName || "";
+    const callerNumber = args.callerNumber || "";
+    const appointmentDate = args.appointmentDate || "";
+    const appointmentTime = args.appointmentTime || "";
 
-    const toolCallId: string = toolCallIdFromList || toolCallIdOld;
-    const args = (toolCallIdFromList ? argsFromList : argsOld) || {};
-
-    // Pull caller number from call object as fallback (optional)
-    const realCallerNumber =
-      message?.call?.from?.phoneNumber ||
-      message?.call?.customer?.number ||
-      body?.customer?.number ||
-      "";
-
-    const callerName: string = args.callerName || "";
-    const callerEmail: string = args.callerEmail || "";
-    const callerNumber: string = args.callerNumber || realCallerNumber || "";
-    const appointmentDate: string = args.appointmentDate || "";
-    const appointmentTime: string = args.appointmentTime || "";
+    console.log('=== Extracted Values ===');
+    console.log('  callerEmail:', callerEmail);
+    console.log('  callerName:', callerName);
+    console.log('  callerNumber:', callerNumber);
+    console.log('  appointmentDate:', appointmentDate);
+    console.log('  appointmentTime:', appointmentTime);
 
     if (!toolCallId) {
+      console.error('❌ Missing toolCallId');
       return new NextResponse("Missing toolCallId", { status: 400 });
     }
-    if (!callerEmail) {
-      // Return tool result (so Vapi can continue) instead of hard failing
+
+    if (!callerEmail || callerEmail.trim() === "") {
+      console.warn('⚠️ Missing callerEmail - returning error with available data');
+      console.warn('Available args:', JSON.stringify(args, null, 2));
+      
+      // Return tool result (so Vapi can continue) with all available data
       return NextResponse.json({
         results: [
           {
             toolCallId,
-            result: { ok: false, error: "Missing callerEmail" },
+            result: {
+              ok: false,
+              error: "Missing callerEmail",
+              dataReceived: {
+                callerName: callerName || null,
+                callerNumber: callerNumber || null,
+                appointmentDate: appointmentDate || null,
+                appointmentTime: appointmentTime || null,
+              },
+              debug: {
+                rawArgs: rawArgs,
+                parsedArgs: args,
+                toolCall: toolCall,
+              },
+            },
           },
         ],
       });
     }
+
+    console.log('✅ Email found, proceeding to send confirmation email...');
 
     // Email content
     const subject = "Confirmed: Your Appointment with Medical Center";
@@ -87,12 +130,17 @@ export async function POST(req: NextRequest) {
       "Medical Center",
     ].filter(Boolean);
 
+    console.log('Sending email to:', callerEmail);
+    console.log('Email subject:', subject);
+    
     await transport.sendMail({
       from: `"Innovative Mojo Support" <support@innovativemojo.com>`,
       to: callerEmail,
       subject,
       text: textLines.join("\n"),
     });
+
+    console.log('✅ Email sent successfully to:', callerEmail);
 
     // IMPORTANT: Vapi-required response format
     return NextResponse.json({

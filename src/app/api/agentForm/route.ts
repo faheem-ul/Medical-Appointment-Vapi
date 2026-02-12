@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { google } from "googleapis";
 
 // Simple in-memory rate limiting (use Redis in production)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -88,204 +89,57 @@ function checkEmailRateLimit(
   return true; // Allowed
 }
 
-// Function to get contacts from GoHighLevel
-async function getContactsFromGHL(limit: number = 10, startAfter?: string) {
-  const GHL_API_KEY = process.env.GHL_API_KEY;
-  const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+// Function to send contact data to Google Sheet
+async function sendToGoogleSheet(name: string, email: string, phone: string) {
+  const GOOGLE_SHEETS_SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  const GOOGLE_SHEETS_CLIENT_EMAIL = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+  const GOOGLE_SHEETS_PRIVATE_KEY = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
 
-  if (!GHL_API_KEY || !GHL_LOCATION_ID) {
-    console.warn("GHL credentials not configured. Cannot fetch contacts.");
+  if (
+    !GOOGLE_SHEETS_SPREADSHEET_ID ||
+    !GOOGLE_SHEETS_CLIENT_EMAIL ||
+    !GOOGLE_SHEETS_PRIVATE_KEY
+  ) {
     console.warn(
-      `GHL_API_KEY exists: ${!!GHL_API_KEY}, GHL_LOCATION_ID exists: ${!!GHL_LOCATION_ID}`
+      "Google Sheets credentials not configured. Skipping Google Sheets integration."
+    );
+    console.warn(
+      `SPREADSHEET_ID exists: ${!!GOOGLE_SHEETS_SPREADSHEET_ID}, CLIENT_EMAIL exists: ${!!GOOGLE_SHEETS_CLIENT_EMAIL}, PRIVATE_KEY exists: ${!!GOOGLE_SHEETS_PRIVATE_KEY}`
     );
     return null;
   }
 
   try {
-    let apiUrl = `https://rest.gohighlevel.com/v1/contacts/?locationId=${GHL_LOCATION_ID}&limit=${limit}`;
-    if (startAfter) {
-      apiUrl += `&startAfter=${startAfter}`;
-    }
-
-    console.log("Fetching contacts from GHL:", {
-      url: apiUrl,
-      locationId: GHL_LOCATION_ID,
-      limit,
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: GOOGLE_SHEETS_CLIENT_EMAIL,
+        private_key: GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      },
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
 
-    const response = await fetch(apiUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${GHL_API_KEY}`,
-        "Content-Type": "application/json",
-        Version: "2021-07-28",
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const timestamp = new Date().toISOString();
+
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+      range: "Sheet2!A:D",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[name, email, phone, timestamp]],
       },
     });
 
-    const responseText = await response.text();
-    console.log("GHL Get Contacts Response Status:", response.status);
-    console.log("GHL Get Contacts Response:", responseText);
-
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { rawResponse: responseText };
-      }
-      console.error("GHL API Error Details:", errorData);
-      throw new Error(
-        `GHL API error: ${response.status} ${
-          response.statusText
-        } - ${JSON.stringify(errorData)}`
-      );
-    }
-
-    const data = JSON.parse(responseText);
-    console.log("=== GHL CONTACTS DATA ===");
-    console.log("Total contacts:", data.contacts?.length || 0);
-    console.log("Contacts:", JSON.stringify(data, null, 2));
-    console.log("=== END GHL CONTACTS DATA ===");
-    return data;
+    console.log("✅ Data sent to Google Sheet successfully");
+    console.log("Updated range:", response.data.updates?.updatedRange);
+    return response.data;
   } catch (error) {
-    console.error("Error fetching contacts from GHL:", error);
+    console.error("❌ Error sending data to Google Sheet:", error);
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
     }
-    throw error;
-  }
-}
-
-// Function to send contact to GoHighLevel
-async function sendToGHL(name: string, email: string, phone: string) {
-  const GHL_API_KEY = process.env.GHL_API_KEY;
-  const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
-
-  if (!GHL_API_KEY || !GHL_LOCATION_ID) {
-    console.warn("GHL credentials not configured. Skipping GHL integration.");
-    console.warn(
-      `GHL_API_KEY exists: ${!!GHL_API_KEY}, GHL_LOCATION_ID exists: ${!!GHL_LOCATION_ID}`
-    );
-    return null;
-  }
-
-  try {
-    // Split name into firstName and lastName
-    const nameParts = name.trim().split(/\s+/);
-    const firstName = nameParts[0] || name;
-    const lastName = nameParts.slice(1).join(" ") || "";
-
-    // Format phone number (ensure it's in the correct format)
-    const formattedPhone = phone.startsWith("+")
-      ? phone
-      : `+1${phone.replace(/\D/g, "")}`;
-
-    const requestBody = {
-      firstName,
-      lastName,
-      email,
-      phone: formattedPhone,
-      tags: ["medical outbound"],
-    };
-
-    // Try with locationId in URL query parameter
-    const apiUrl = `https://rest.gohighlevel.com/v1/contacts/?locationId=${GHL_LOCATION_ID}`;
-
-    console.log("=== SENDING CONTACT TO GHL ===");
-    console.log("URL:", apiUrl);
-    console.log("Location ID:", GHL_LOCATION_ID);
-    console.log("Request Body:", JSON.stringify(requestBody, null, 2));
-    console.log("Timestamp:", new Date().toISOString());
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GHL_API_KEY}`,
-        "Content-Type": "application/json",
-        Version: "2021-07-28",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const responseText = await response.text();
-    console.log("=== GHL API RESPONSE ===");
-    console.log("Status:", response.status);
-    console.log("Status Text:", response.statusText);
-    console.log(
-      "Response Headers:",
-      Object.fromEntries(response.headers.entries())
-    );
-    console.log("Response Body:", responseText);
-    console.log("Timestamp:", new Date().toISOString());
-
-    // Handle different response statuses
-    if (response.status === 200 || response.status === 201) {
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("Failed to parse response as JSON:", parseError);
-        data = { rawResponse: responseText };
-      }
-
-      // Check if contact was created or updated
-      if (data.contact && data.contact.id) {
-        console.log("✅ Contact successfully processed in GHL");
-        console.log("Contact ID:", data.contact.id);
-        console.log("Contact Email:", data.contact.email);
-        console.log("Contact Phone:", data.contact.phone);
-        console.log("Is New Contact:", response.status === 201);
-        console.log("Full Contact Data:", JSON.stringify(data, null, 2));
-      } else {
-        console.warn("⚠️ Response indicates success but no contact ID found");
-        console.warn("Response data:", JSON.stringify(data, null, 2));
-      }
-
-      return data;
-    }
-
-    // Handle error responses
-    let errorData;
-    try {
-      errorData = JSON.parse(responseText);
-    } catch {
-      errorData = { rawResponse: responseText };
-    }
-
-    console.error("❌ GHL API Error:");
-    console.error("Status:", response.status);
-    console.error("Error Data:", JSON.stringify(errorData, null, 2));
-
-    // Check if it's a duplicate contact error
-    if (response.status === 422 || response.status === 409) {
-      console.warn(
-        "⚠️ Possible duplicate contact - GHL may have updated existing contact"
-      );
-      // Some GHL APIs return 422 for duplicates but still process the contact
-      // Try to parse if there's any contact data in the error response
-      if (errorData.contact || errorData.data) {
-        console.log(
-          "Contact may have been updated:",
-          errorData.contact || errorData.data
-        );
-        return errorData.contact || errorData.data;
-      }
-    }
-
-    throw new Error(
-      `GHL API error: ${response.status} ${
-        response.statusText
-      } - ${JSON.stringify(errorData)}`
-    );
-  } catch (error) {
-    console.error("=== ERROR SENDING TO GHL ===");
-    console.error("Error:", error);
-    if (error instanceof Error) {
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
-    }
-    console.error("Timestamp:", new Date().toISOString());
     throw error;
   }
 }
@@ -413,51 +267,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send to GoHighLevel
-    let ghlResult = null;
-    let ghlError = null;
-    let ghlContactId = null;
-    let ghlStatus = "not_attempted";
+    // Send to Google Sheet
+    let googleSheetStatus = "not_attempted";
+    let googleSheetError = null;
 
     try {
-      console.log("=== ATTEMPTING TO SEND TO GHL ===");
-      console.log("Name:", name);
-      console.log("Email:", email);
-      console.log("Phone:", phone);
+      console.log("=== ATTEMPTING TO SEND TO GOOGLE SHEET ===");
+      const sheetResult = await sendToGoogleSheet(name, email, phone);
 
-      ghlResult = await sendToGHL(name, email, phone);
-
-      if (ghlResult) {
-        ghlStatus = "success";
-        // Extract contact ID if available
-        if (ghlResult.contact?.id) {
-          ghlContactId = ghlResult.contact.id;
-        } else if (ghlResult.id) {
-          ghlContactId = ghlResult.id;
-        }
-        console.log(
-          "✅ GHL contact processed successfully. Contact ID:",
-          ghlContactId
-        );
+      if (sheetResult) {
+        googleSheetStatus = "success";
+        console.log("✅ Google Sheet updated successfully");
       } else {
-        ghlStatus = "skipped";
-        console.log("⚠️ GHL integration skipped (credentials not configured)");
+        googleSheetStatus = "skipped";
+        console.log(
+          "⚠️ Google Sheets integration skipped (credentials not configured)"
+        );
       }
     } catch (error) {
-      ghlStatus = "failed";
-      ghlError = error instanceof Error ? error.message : String(error);
-      console.error("❌ Failed to send to GHL:", error);
-      console.error("Error details:", ghlError);
-      // Continue with email sending even if GHL fails
+      googleSheetStatus = "failed";
+      googleSheetError = error instanceof Error ? error.message : String(error);
+      console.error("❌ Failed to send to Google Sheet:", error);
+      console.error("Error details:", googleSheetError);
+      // Continue with email sending even if Google Sheets fails
     }
 
     const transport = nodemailer.createTransport({
       host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
+      port: 465,
+      secure: true,
       auth: {
-        user: "support@innovativemojo.com",
-        pass: "vfps wphk rrsx wing",
+        user: "faheemulhassanaziz@gmail.com",
+        pass: "pyvg cksu ueom bnlr",
       },
       tls: {
         rejectUnauthorized: false,
@@ -465,9 +306,9 @@ export async function POST(request: NextRequest) {
     });
     // ${process.env.Email_Captive}
     const mailoptionsToAdmin = {
-      from: "support@innovativemojo.com",
+      from: "faheemulhassanaziz@gmail.com",
       replyTo: email,
-      to: `support@innovativemojo.com, developer@innovativemojo.com`,
+      to: `faheemulhassanaziz@gmail.com`,
       subject: "Innovative Mojo Response",
       text: `Following is the new Client:
       Name: ${name} 
@@ -476,44 +317,44 @@ export async function POST(request: NextRequest) {
     };
 
     const mailoptionsToUser = {
-      from: "support@innovativemojo.com",
+      from: "faheemulhassanaziz@gmail.com",
       to: email,
-      subject: "Thanks for requesting a demo with Innovative MOJO",
+      subject: "Thanks for requesting a demo with Thank You Doctor.",
       html: `
         <p>Hi ${name},</p>
         
-        <p>Thanks for requesting a demo with Innovative MOJO.</p>
+        <p>Thank you for requesting a demo with My Doctor's AI Medical Assistant.</p>
         
-        <p>Our AI agent is calling you now to walk you through a live demo of how we build digital workforces that answer calls, qualify leads, and automate follow-ups for your business.</p>
+        <p>Our AI agent is calling you now to demonstrate how we automate patient intake, triage inquiries, and schedule appointments with clinical precision.</p>
         
         <p><strong>If you miss the call</strong></p>
         
         <p>No problem at all.</p>
         
-        <p>You can call us directly at <a href="tel:+18182759714">(818) 275-9714</a> to hear the demo anytime.</p>
+        <p>You can call our demo line directly at <a href="tel:+15169731565">(516) 973 1565</a> to experience the assistant anytime.</p>
         
-        <p>The AI will pick up immediately and walk you through the experience step by step.</p>
+        <p>The AI will handle your call immediately, guiding you through a simulated patient experience step by step.</p>
         
-        <p><strong>What you'll see in the demo</strong></p>
+        <p><strong>What you'll experience in the demo:</strong></p>
         
         <ul>
-          <li>How the AI answers and handles real business calls</li>
-          <li>How it qualifies leads and books appointments</li>
-          <li>How it follows up automatically via email and SMS</li>
-          <li>How it integrates into your existing workflow</li>
+          <li><strong>Smart Intake:</strong> How the AI collects patient information and reason for visit.</li>
+          <li><strong>Instant Scheduling:</strong> Real-time appointment booking and calendar synchronization.</li>
+          <li><strong>Automated Follow-ups:</strong> Post-call SMS and email confirmations.</li>
         </ul>
         
-        <p>This demo takes just a few minutes and shows exactly how the system works in real time.</p>
+        <p>This demo takes just a few minutes and showcases how our AI reduces administrative burden while improving patient access.</p>
         
-        <p>If you have questions after the demo, simply reply to this email and our team will take it from there.</p>
+        <p>If you have any questions after the demo, simply reply to this email and one of our specialists will be happy to help.</p>
         
-        <p>Looking forward to showing you what's possible.</p>
+        <p>Best regards,</p>
         
         <p>—<br>
-        Innovative MOJO<br>
-        We Build Digital Workforces — Not Websites<br><br>
-        📞 <a href="tel:+18182759714">(818) 275-9714</a><br>
-        🌐 <a href="https://innovativemojo.com">https://innovativemojo.com</a></p>
+        <strong>My Doctor Support Team</strong><br>
+
+        Automating Healthcare Operations<br><br>
+        📞 <a href="tel:+15169731565">(516) 973 1565</a><br>
+        🌐 <a href="https://medical-appointment-vapi.vercel.app/">https://medical-appointment-vapi.vercel.app/</a></p>
       `,
     };
 
@@ -524,11 +365,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         message: "Form submitted successfully",
-        ghl: {
-          status: ghlStatus,
-          contactCreated: ghlResult !== null,
-          contactId: ghlContactId || undefined,
-          error: ghlError || undefined,
+        googleSheet: {
+          status: googleSheetStatus,
+          error: googleSheetError || undefined,
         },
       },
       { status: 200 }
@@ -544,56 +383,6 @@ export async function POST(request: NextRequest) {
         error: "Failed to send email. Please try again later.",
         details:
           process.env.NODE_ENV === "development" ? errorMessage : undefined,
-      },
-      { status: 500 }
-    );
-  }
-}
-
-// GET handler to fetch contacts from GHL
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
-    const startAfter = searchParams.get("startAfter") || undefined;
-
-    console.log("=== GET CONTACTS REQUEST ===");
-    console.log("Limit:", limit);
-    console.log("Start After:", startAfter);
-
-    const contactsData = await getContactsFromGHL(limit, startAfter);
-
-    if (!contactsData) {
-      return NextResponse.json(
-        {
-          error: "GHL credentials not configured",
-          contacts: [],
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        contacts: contactsData.contacts || [],
-        meta: contactsData.meta || {},
-        total: contactsData.contacts?.length || 0,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error in GET handler:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error("Detailed error:", errorMessage);
-
-    return NextResponse.json(
-      {
-        error: "Failed to fetch contacts from GHL",
-        details:
-          process.env.NODE_ENV === "development" ? errorMessage : undefined,
-        contacts: [],
       },
       { status: 500 }
     );

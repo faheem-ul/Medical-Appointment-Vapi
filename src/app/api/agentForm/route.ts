@@ -113,7 +113,7 @@ async function sendToGoogleSheet(name: string, email: string, phone: string) {
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: GOOGLE_SHEETS_CLIENT_EMAIL,
-        private_key: GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        private_key: GOOGLE_SHEETS_PRIVATE_KEY.split(String.raw`\n`).join("\n"),
       },
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });

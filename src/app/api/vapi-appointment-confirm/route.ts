@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     if (!callerEmail || callerEmail.trim() === "") {
       console.warn(
-        "⚠️ Missing callerEmail - returning error with available data"
+        "⚠️ Missing callerEmail - returning error with available data",
       );
       console.warn("Available args:", JSON.stringify(args, null, 2));
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     console.log("Email subject:", subject);
 
     await transport.sendMail({
-      from: `"Innovative Mojo Support" <support@innovativemojo.com>`,
+      from: `"Innovative Mojo Support" <faheemulhassanaziz@gmail.com>`,
       to: callerEmail,
       subject,
       text: textLines.join("\n"),
